@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111014">
+  <meta name="description" content="OUT OF POCKET — an unfiltered party card game for 3–10 friends.">
+  <title>OUT OF POCKET — Party Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Out of Pocket home"><span class="brand-mark">O<span>O</span>P</span><span class="brand-name">OUT OF<br>POCKET</span></a>
+    <div class="top-actions"><span class="age-tag">18+ ONLY</span><button class="icon-button" id="rules-open" aria-label="How to play">?</button></div>
+  </header>
+
+  <main id="app">
+    <section class="screen active" id="home-screen">
+      <div class="hero">
+        <div class="eyebrow"><span class="live-dot"></span> THE PARTY GAME WITH NO FILTER</div>
+        <h1>GOOD FRIENDS.<br><span>BAD</span> ANSWERS.</h1>
+        <p class="hero-copy">One prompt. Your most questionable answer. Absolutely no context.</p>
+        <div class="hero-actions"><button class="button button-primary" id="create-room">CREATE A ROOM <span>↗</span></button><button class="button button-secondary" id="join-open">JOIN WITH CODE</button></div>
+        <div class="hero-foot"><span>3–10 PLAYERS</span><i></i><span>FIRST TO 10</span><i></i><span>18+ HUMOR</span></div>
+      </div>
+      <div class="home-note"><span class="note-star">✳</span><div><strong>WARNING: MAY CAUSE GROUP CHAT DAMAGE</strong><p>Made for the friends who should probably know better.</p></div></div>
+    </section>
+
+    <section class="screen" id="lobby-screen">
+      <div class="section-heading"><div class="eyebrow">THE GATHERING</div><h2>THE <span>LOBBY.</span></h2><p>Get your people in here. The chaos starts when the host says so.</p></div>
+      <div class="lobby-layout">
+        <div class="panel room-panel"><div class="panel-label">ROOM CODE</div><div class="room-code" id="room-code">------</div><button class="text-button" id="copy-code">COPY CODE ↗</button><div class="panel-divider"></div><div class="panel-label">PLAYERS <span id="player-count">0/10</span></div><div class="player-list" id="player-list"></div><div class="join-hint">Share the code with your friends.</div></div>
+        <div class="panel settings-panel"><div class="panel-label">GAME SETTINGS</div><div class="setting-row"><span>Winning score</span><strong>10 POINTS</strong></div><div class="setting-row"><span>Judge rotation</span><strong>EVERY ROUND</strong></div><div class="setting-row"><span>Submissions</span><strong>ANONYMOUS</strong></div><div class="setting-row"><span>Hand size</span><strong>10 CARDS</strong></div><div class="panel-divider"></div><label class="field-label" for="player-name">YOUR DISPLAY NAME</label><input id="player-name" maxlength="18" placeholder="Enter your name"><button class="button button-primary full-width" id="start-game">START GAME <span>↗</span></button><p class="small-muted" id="lobby-message">The host starts when everyone is ready.</p></div>
+      </div>
+      <button class="back-link" id="leave-lobby">← BACK TO HOME</button>
+    </section>
+
+    <section class="screen" id="game-screen">
+      <div class="game-top"><div><div class="eyebrow">ROUND <span id="round-number">1</span></div><div class="judge-label">JUDGE: <strong id="judge-name">—</strong></div></div><div class="score-pill"><span>FIRST TO</span><strong>10</strong></div><button class="text-button" id="exit-game">EXIT</button></div>
+      <div class="prompt-wrap"><div class="card-kicker">THE PROMPT</div><article class="black-card" id="prompt-card"></article></div>
+      <div class="game-status" id="game-status">Choose the answer that does the most damage.</div>
+      <div class="hand-heading"><span>YOUR HAND</span><span id="hand-count">10 CARDS</span></div>
+      <div class="hand" id="hand"></div>
+      <div class="submit-row"><span id="submit-hint">Pick one card to submit anonymously.</span><button class="button button-primary" id="submit-card" disabled>SUBMIT ANSWER ↗</button></div>
+      <div class="waiting-panel hidden" id="waiting-panel"><span class="spinner"></span><strong>ANSWER LOCKED IN.</strong><p>Wait for the others to expose themselves.</p></div>
+      <div class="reveal-area hidden" id="reveal-area"><div class="reveal-heading"><div><div class="eyebrow">THE EVIDENCE</div><h3>LET'S SEE WHAT YOU DID.</h3></div><span id="submission-count"></span></div><div class="submission-grid" id="submission-grid"></div><button class="button button-primary full-width hidden" id="next-round">NEXT ROUND ↗</button></div>
+      <aside class="scoreboard panel"><div class="panel-label">THE DAMAGE SO FAR</div><div id="score-list" class="score-list"></div></aside>
+    </section>
+
+    <section class="screen" id="join-screen"><div class="section-heading"><div class="eyebrow">YOUR INVITATION</div><h2>GET IN <span>HERE.</span></h2><p>Enter the six-character room code your friend sent you.</p></div><div class="join-box panel"><label class="field-label" for="join-code">ROOM CODE</label><input id="join-code" class="code-input" maxlength="6" placeholder="ABC123" autocomplete="off"><label class="field-label" for="join-name">YOUR NAME</label><input id="join-name" maxlength="18" placeholder="Enter your name"><button class="button button-primary full-width" id="join-room">JOIN THE CHAOS ↗</button><p class="small-muted" id="join-message"></p></div><button class="back-link" id="join-back">← BACK TO HOME</button></section>
+  </main>
+
+  <dialog id="rules-dialog" class="rules-dialog"><button class="dialog-close" id="rules-close" aria-label="Close">×</button><div class="eyebrow">READ BEFORE YOU REGRET IT</div><h2>HOW TO <span>PLAY.</span></h2><ol><li>One player is the judge each round. The judge rotates clockwise.</li><li>Everyone else gets 10 white answer cards.</li><li>The judge reveals a black prompt. Pick the funniest answer in your hand.</li><li>Submissions stay anonymous until the judge picks a winner.</li><li>The winning player gets 1 point. First to 10 wins.</li><li>Used cards are replaced. Keep the chaos moving.</li></ol><p class="small-muted">18+ humor. Play with people who know your sense of humor.</p></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <footer><span>OUT OF POCKET © 2026</span><span>PLAY NICE. OR DON'T.</span></footer>
+  <script src="cards.js"></script><script src="game.js"></script>
+</body>
+</html>
