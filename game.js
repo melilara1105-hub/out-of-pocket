@@ -1,33 +1,81 @@
-/* OUT OF POCKET — local playable prototype.
-   Multiplayer synchronization will be connected after Supabase credentials are configured. */
+/* OUT OF POCKET — Supabase-backed multiplayer client.
+   The database enforces room membership, private hands, anonymous reveal and judge-only scoring. */
 (() => {
  const $ = id => document.getElementById(id);
- const screens = ["home-screen","lobby-screen","join-screen","game-screen"];
- const state = {room:null,players:[],me:null,judge:0,round:1,hand:[],selected:null,prompt:null,submissions:[],scores:{},phase:"lobby",local:true};
- const prompts = [...window.OP_CARDS.prompts], answers = [...window.OP_CARDS.answers];
- const shuffle = a => [...a].sort(() => Math.random()-.5);
- const show = id => {screens.forEach(s=>$(s).classList.toggle("active",s===id));};
+ const screens=["home-screen","lobby-screen","join-screen","game-screen"];
+ const state={client:null,code:null,me:null,room:null,poll:null,selected:null};
+ const show=id=>screens.forEach(s=>$(s).classList.toggle("active",s===id));
+ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  let toastTimer;
- function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2300);}
- function code(){return Math.random().toString(36).slice(2,8).toUpperCase();}
- function player(name,host=false){return {id:crypto.randomUUID?crypto.randomUUID():String(Math.random()),name,host,score:0};}
- function draw(n){return shuffle(answers).slice(0,n);}
- function renderPlayers(){ $("player-count").textContent=state.players.length+"/10";$("player-list").innerHTML=state.players.map((p,i)=>'<div class="player-row"><span class="avatar">'+escapeHtml(p.name.slice(0,1).toUpperCase())+'</span><span>'+escapeHtml(p.name)+'</span>'+(p.host?'<span class="host-tag">HOST</span>':'')+'</div>').join("");}
- function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
- function createRoom(){const name=($("player-name").value||"Host").trim().slice(0,18);state.me=player(name,true);state.players=[state.me];state.room=code();state.local=true;$("room-code").textContent=state.room;renderPlayers();$("lobby-message").textContent="Local demo mode: invite friends to try the same device. Online rooms need Supabase setup.";show("lobby-screen");}
- function joinLocal(){const name=($("join-name").value||"Player").trim().slice(0,18);if(!state.room){$("join-message").textContent="No local room is open in this browser. Create a room here first.";return;}if(state.players.length>=10){$("join-message").textContent="This room is full.";return;}state.players.push(player(name));renderPlayers();show("lobby-screen");}
- function start(){if(state.players.length<3){toast("You need at least 3 players. Add demo players to test the game.");["Alex","Sam"].slice(0,3-state.players.length).forEach(n=>state.players.push(player(n)));renderPlayers();}state.players.forEach(p=>{state.scores[p.id]=0;});state.judge=0;state.round=1;state.hand=draw(10);newRound();}
- function newRound(){state.phase="submit";state.selected=null;state.prompt=shuffle(prompts)[0];state.submissions=[];$("round-number").textContent=state.round;$("judge-name").textContent=state.players[state.judge].name;$("prompt-card").textContent=state.prompt;$("game-status").textContent=state.players[state.judge].id===state.me.id?"You're judging this round. Read the answers and pick a winner.":"Choose the answer that does the most damage.";$("waiting-panel").classList.add("hidden");$("reveal-area").classList.add("hidden");$("next-round").classList.add("hidden");renderHand();renderScores();show("game-screen");}
- function renderHand(){$("hand-count").textContent=state.hand.length+" CARDS";$("hand").innerHTML=state.hand.map((c,i)=>'<button class="answer-card '+(state.selected===i?"selected":"")+'" data-index="'+i+'">'+escapeHtml(c)+'</button>').join("");$("hand").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{if(state.players[state.judge].id===state.me.id||state.phase!=="submit")return;state.selected=Number(b.dataset.index);renderHand();$("submit-card").disabled=false;}));$("submit-card").disabled=state.selected===null||state.players[state.judge].id===state.me.id;}
- function submit(){if(state.selected===null)return;const card=state.hand.splice(state.selected,1)[0];state.selected=null;state.submissions.push({card,playerId:state.me.id});$("hand").innerHTML="";$("submit-card").disabled=true;$("submit-hint").textContent="Answer submitted."; $("waiting-panel").classList.remove("hidden");$("game-status").textContent="Your answer is locked. In this local prototype, reveal the round when ready.";renderHand();$("reveal-area").classList.remove("hidden");renderSubmissions();}
- function reveal(){state.phase="judge";$("waiting-panel").classList.add("hidden");$("reveal-area").classList.remove("hidden");$("game-status").textContent="The judge picks the answer they love most.";renderSubmissions();}
- function renderSubmissions(){const grid=$("submission-grid");const list=state.submissions.length?state.submissions:[{card:"A 3 AM text that should've stayed in drafts.",playerId:"demo1"},{card:"A suspiciously confident raccoon.",playerId:"demo2"}];$("submission-count").textContent=list.length+" SUBMISSIONS";grid.innerHTML=list.map((s,i)=>'<div class="submission-card"><p>'+escapeHtml(s.card)+'</p><button data-winner="'+i+'">PICK THIS WINNER</button></div>').join("");grid.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>award(Number(b.dataset.winner),list)));}
- function award(i,list){const s=list[i];const winner=state.players.find(p=>p.id===s.playerId)||state.players.find(p=>p.id!==state.players[state.judge].id);if(!winner)return;winner.score++;state.scores[winner.id]=winner.score;toast(winner.name+" wins the round! +1 point");renderScores();$("game-status").textContent=winner.name+" takes the point!";$("submission-grid").querySelectorAll("button").forEach(b=>b.disabled=true);$("next-round").classList.remove("hidden");if(winner.score>=10){$("next-round").textContent="PLAY AGAIN ↗";$("game-status").textContent=winner.name+" wins OUT OF POCKET! First to 10!";}}
- function renderScores(){$("score-list").innerHTML=state.players.slice().sort((a,b)=>b.score-a.score).map(p=>'<div class="score-item">'+escapeHtml(p.name)+' <strong>'+p.score+'</strong></div>').join("");}
- function next(){if(state.players.some(p=>p.score>=10)){state.players.forEach(p=>p.score=0);state.round=1;}else{state.round++;state.judge=(state.judge+1)%state.players.length;}state.hand=draw(10);newRound();}
- $("create-room").addEventListener("click",createRoom);$("join-open").addEventListener("click",()=>show("join-screen"));$("join-back").addEventListener("click",()=>show("home-screen"));$("leave-lobby").addEventListener("click",()=>show("home-screen"));$("start-game").addEventListener("click",start);$("submit-card").addEventListener("click",submit);$("next-round").addEventListener("click",next);$("exit-game").addEventListener("click",()=>show("home-screen"));$("join-room").addEventListener("click",joinLocal);$("copy-code").addEventListener("click",()=>navigator.clipboard?.writeText(state.room).then(()=>toast("Room code copied!")).catch(()=>toast("Room code: "+state.room)));$("rules-open").addEventListener("click",()=>$("rules-dialog").showModal());$("rules-close").addEventListener("click",()=>$("rules-dialog").close());
- // Local prototype helper: tap the prompt to reveal submitted answers for a quick demo.
- $("prompt-card").addEventListener("click",()=>{if(state.phase==="submit"&&state.players[state.judge].id===state.me.id){reveal();}});
- // If Supabase keys are configured in config.js, multiplayer integration can be added here.
- if(window.OP_SUPABASE_URL&&window.OP_SUPABASE_ANON_KEY&&window.supabase){window.opSupabase=window.supabase.createClient(window.OP_SUPABASE_URL,window.OP_SUPABASE_ANON_KEY);}
+ function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2600);}
+ function configured(){return window.OP_SUPABASE_URL&&window.OP_SUPABASE_ANON_KEY&&!window.OP_SUPABASE_URL.includes("YOUR_")&&!window.OP_SUPABASE_ANON_KEY.includes("YOUR_");}
+ async function ensureClient(){
+  if(!configured())throw new Error("Supabase isn't configured yet. Follow the setup steps in README.md.");
+  if(!state.client)state.client=window.supabase.createClient(window.OP_SUPABASE_URL,window.OP_SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+  const {data:{session}}=await state.client.auth.getSession();
+  if(!session){const {error}=await state.client.auth.signInAnonymously();if(error)throw error;}
+  return state.client;
+ }
+ async function rpc(name,args={}){const c=await ensureClient();const {data,error}=await c.rpc(name,args);if(error)throw error;return data;}
+ function err(e){toast(e?.message||"Something went wrong. Please try again.");}
+ function setPolling(){clearInterval(state.poll);state.poll=setInterval(async()=>{if(!state.code)return;try{const s=await rpc("op_get_state",{p_code:state.code});render(s);}catch(e){console.error(e);}},1800);}
+ async function createRoom(){
+  try{const name=($("player-name").value||"Host").trim();const data=await rpc("op_create_room",{p_name:name});state.code=data.code;await refresh();setPolling();show("lobby-screen");}
+  catch(e){err(e);}
+ }
+ async function joinRoom(){
+  try{const name=($("join-name").value||"Player").trim();const code=$("join-code").value.trim().toUpperCase();if(code.length!==6)throw new Error("Enter the six-character room code.");const data=await rpc("op_join_room",{p_code:code,p_name:name});state.code=data.code;await refresh();setPolling();show("lobby-screen");}
+  catch(e){$("join-message").textContent=e.message||"Couldn't join room."; }
+ }
+ async function refresh(){const s=await rpc("op_get_state",{p_code:state.code});render(s);}
+ async function start(){try{await rpc("op_start_game",{p_code:state.code});await refresh();}catch(e){err(e);}}
+ async function submit(){if(!state.selected)return;try{await rpc("op_submit_card",{p_code:state.code,p_card_id:Number(state.selected)});state.selected=null;await refresh();}catch(e){err(e);}}
+ async function choose(id){try{await rpc("op_choose_winner",{p_code:state.code,p_submission_id:id});await refresh();}catch(e){err(e);}}
+ async function next(){try{await rpc("op_next_round",{p_code:state.code});state.selected=null;await refresh();}catch(e){err(e);}}
+ function render(s){
+  state.room=s;state.me=s.me;
+  $("room-code").textContent=s.code;$("player-count").textContent=s.players.length+"/10";
+  $("player-list").innerHTML=s.players.map(p=>'<div class="player-row"><span class="avatar">'+esc(p.name.slice(0,1).toUpperCase())+'</span><span>'+esc(p.name)+'</span>'+(p.host?'<span class="host-tag">HOST</span>':'')+(p.id===s.me.id?'<span class="host-tag">YOU</span>':'')+'</div>').join("");
+  $("start-game").classList.toggle("hidden",!s.me.host||s.status!=="lobby");
+  $("lobby-message").textContent=s.status==="lobby"?(s.players.length<3?"Waiting for at least 3 players…":"Everyone's here. Host can start the game."):"Game in progress.";
+  if(s.status==="lobby"){show("lobby-screen");return;}
+  show("game-screen");
+  $("round-number").textContent=s.round_number;$("judge-name").textContent=(s.players.find(p=>p.id===s.judge_player_id)||{}).name||"—";
+  $("prompt-card").textContent=s.prompt||"Waiting for the next prompt…";
+  const isJudge=s.me.id===s.judge_player_id;
+  $("score-list").innerHTML=[...s.players].sort((a,b)=>b.score-a.score).map(p=>'<div class="score-item">'+esc(p.name)+' <strong>'+p.score+'</strong></div>').join("");
+  $("hand-count").textContent=(s.hand?.length||0)+" CARDS";
+  if(s.round_status==="submitting"){
+   $("game-status").textContent=isJudge?"You're the judge. Your job is to wait for the anonymous answers.":"Pick the funniest answer and submit it. Your name stays hidden.";
+   $("hand").innerHTML=isJudge?"<p class='small-muted'>The judge sits this round out. Wait for submissions.</p>":(s.hand||[]).map(c=>'<button class="answer-card '+(String(state.selected)===String(c.id)?"selected":"")+'" data-id="'+c.id+'">'+esc(c.body)+'</button>').join("");
+   $("hand").querySelectorAll("button[data-id]").forEach(b=>b.addEventListener("click",()=>{state.selected=b.dataset.id;render(s);}));
+   $("submit-hint").textContent=isJudge?"You're judging this round.":"Choose one card. It will be anonymous.";
+   $("submit-card").classList.toggle("hidden",isJudge);$("submit-card").disabled=!state.selected;
+   $("waiting-panel").classList.toggle("hidden",isJudge||s.hand?.length===10);
+   $("waiting-panel").querySelector("p").textContent="Your answer is in. Waiting for the other players…";
+   $("reveal-area").classList.add("hidden");
+  }else{
+   $("hand").innerHTML="";$("submit-card").classList.add("hidden");$("waiting-panel").classList.add("hidden");$("reveal-area").classList.remove("hidden");
+   $("game-status").textContent=s.round_status==="judging"?(isJudge?"All answers are in. Pick the winner.":"Answers revealed. The judge is deciding."):(s.winner?s.winner.name+" won this round!":"Round complete.");
+   $("submission-count").textContent=(s.submissions||[]).length+" ANSWERS";
+   $("submission-grid").innerHTML=(s.submissions||[]).map((sub,i)=>'<div class="submission-card"><p>'+esc(sub.body)+'</p>'+(s.round_status==="judging"&&isJudge?'<button data-sub="'+sub.id+'">PICK THIS WINNER</button>':(s.winner&&s.winner.name?"<span class='small-muted'>ROUND WINNER: "+esc(s.winner.name)+"</span>":"<span class='small-muted'>ANONYMOUS SUBMISSION</span>"))+'</div>').join("");
+   $("submission-grid").querySelectorAll("button[data-sub]").forEach(b=>b.addEventListener("click",()=>choose(b.dataset.sub)));
+   const nextBtn=$("next-round");nextBtn.classList.toggle("hidden",s.round_status!=="complete"||!isJudge||s.status==="finished");nextBtn.textContent="NEXT ROUND ↗";
+   if(s.status==="finished"){$("game-status").textContent=(s.winner?.name||"A player")+" wins OUT OF POCKET! First to 10!";nextBtn.classList.add("hidden");}
+  }
+ }
+ $("create-room").addEventListener("click",createRoom);
+ $("join-open").addEventListener("click",()=>show("join-screen"));
+ $("join-back").addEventListener("click",()=>show("home-screen"));
+ $("leave-lobby").addEventListener("click",()=>{clearInterval(state.poll);state.code=null;show("home-screen");});
+ $("start-game").addEventListener("click",start);
+ $("submit-card").addEventListener("click",submit);
+ $("next-round").addEventListener("click",next);
+ $("exit-game").addEventListener("click",()=>{clearInterval(state.poll);state.code=null;show("home-screen");});
+ $("join-room").addEventListener("click",joinRoom);
+ $("copy-code").addEventListener("click",()=>navigator.clipboard?.writeText(state.code||"").then(()=>toast("Room code copied!")).catch(()=>toast("Room code: "+state.code)));
+ $("rules-open").addEventListener("click",()=>$("rules-dialog").showModal());
+ $("rules-close").addEventListener("click",()=>$("rules-dialog").close());
+ $("join-code").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
+ if(!configured()){$("lobby-message").textContent="Connect your Supabase project to enable online rooms. Setup instructions are in README.md.";}
 })();
