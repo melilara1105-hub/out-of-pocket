@@ -297,7 +297,10 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'body',s.card_text) order by s.created_at),'[]'::jsonb) into v_submissions from op_submissions s where s.round_id=v_round.id;
  else v_submissions='[]'::jsonb; end if;
  select jsonb_build_object('name',p.display_name,'score',p.score) into v_winner from op_winners w join op_players p on p.id=w.player_id where w.round_id=v_round.id;
- return jsonb_build_object('code',v_room.code,'status',v_room.status,'round_number',v_room.round_number,'me',jsonb_build_object('id',v_me.id,'name',v_me.display_name,'host',v_me.user_id=v_room.host_id),'players',v_players,'judge_player_id',v_round.judge_player_id,'prompt',v_round.prompt,'round_status',v_round.status,'hand',v_hand,'submissions',v_submissions,'winner',v_winner);
+ return jsonb_build_object('code',v_room.code,'status',v_room.status,'round_number',v_room.round_number,'me',jsonb_build_object('id',v_me.id,'name',v_me.display_name,'host',v_me.user_id=v_room.host_id),'players',v_players,'judge_player_id',v_round.judge_player_id,'prompt',v_round.prompt,'round_status',v_round.status,'hand',v_hand,'submissions',v_submissions,'winner',v_winner,
+  'has_submitted',exists(select 1 from op_submissions s where s.round_id=v_round.id and s.player_id=v_me.id),
+  'submitted_count',(select count(*) from op_submissions s where s.round_id=v_round.id),
+  'expected_submissions',(select count(*)-1 from op_players p where p.room_id=v_room.id));
 end $$;
 
 grant execute on function public.op_create_room(text),public.op_join_room(text,text),public.op_start_game(text),public.op_submit_card(text,bigint),public.op_choose_winner(text,uuid),public.op_next_round(text),public.op_get_state(text) to anon,authenticated;
