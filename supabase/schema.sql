@@ -45,8 +45,10 @@ alter table public.op_rooms add constraint op_rooms_current_round_id_fkey foreig
 create table if not exists public.op_hands (
  player_id uuid not null references public.op_players(id) on delete cascade,
  card_id bigint not null references public.op_answers(id),
+ dealt_order bigserial not null,
  primary key(player_id,card_id)
 );
+alter table public.op_hands add column if not exists dealt_order bigserial;
 create table if not exists public.op_submissions (
  id uuid primary key default gen_random_uuid(),
  round_id uuid not null references public.op_rounds(id) on delete cascade,
@@ -59,6 +61,14 @@ create table if not exists public.op_winners (
  round_id uuid primary key references public.op_rounds(id) on delete cascade,
  submission_id uuid not null references public.op_submissions(id),
  player_id uuid not null references public.op_players(id)
+);
+
+-- Cards submitted in a room are permanently retired for that room.
+create table if not exists public.op_used_answers (
+ room_id uuid not null references public.op_rooms(id) on delete cascade,
+ card_id bigint not null references public.op_answers(id),
+ used_at timestamptz not null default now(),
+ primary key(room_id,card_id)
 );
 
 insert into public.op_prompts(body) values
