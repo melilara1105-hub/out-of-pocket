@@ -46,12 +46,13 @@
   $("score-list").innerHTML=[...s.players].sort((a,b)=>b.score-a.score).map(p=>'<div class="score-item">'+esc(p.name)+' <strong>'+p.score+'</strong></div>').join("");
   $("hand-count").textContent=(s.hand?.length||0)+" CARDS";
   if(s.round_status==="submitting"){
+   const hasSubmitted=!!s.has_submitted;
    $("game-status").textContent=isJudge?"You're the judge. Your job is to wait for the anonymous answers.":"Pick the funniest answer and submit it. Your name stays hidden.";
-   $("hand").innerHTML=isJudge?"<p class='small-muted'>The judge sits this round out. Wait for submissions.</p>":(s.hand||[]).map(c=>'<button class="answer-card '+(String(state.selected)===String(c.id)?"selected":"")+'" data-id="'+c.id+'">'+esc(c.body)+'</button>').join("");
+   $("hand").innerHTML=isJudge?"<p class='small-muted'>The judge sits this round out. Wait for submissions.</p>":hasSubmitted?"<p class='small-muted'>Your answer is locked in. Waiting for the others…</p>":(s.hand||[]).map(c=>'<button class="answer-card '+(String(state.selected)===String(c.id)?"selected":"")+'" data-id="'+c.id+'">'+esc(c.body)+'</button>').join("");
    $("hand").querySelectorAll("button[data-id]").forEach(b=>b.addEventListener("click",()=>{state.selected=b.dataset.id;render(s);}));
    $("submit-hint").textContent=isJudge?"You're judging this round.":"Choose one card. It will be anonymous.";
-   $("submit-card").classList.toggle("hidden",isJudge);$("submit-card").disabled=!state.selected;
-   $("waiting-panel").classList.toggle("hidden",isJudge||s.hand?.length===10);
+   $("submit-card").classList.toggle("hidden",isJudge||hasSubmitted);$("submit-card").disabled=!state.selected;
+   $("waiting-panel").classList.toggle("hidden",isJudge||!hasSubmitted);
    $("waiting-panel").querySelector("p").textContent="Your answer is in. Waiting for the other players…";
    $("reveal-area").classList.add("hidden");
   }else{
