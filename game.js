@@ -3,7 +3,7 @@
 (() => {
  const $ = id => document.getElementById(id);
  const screens=["home-screen","lobby-screen","join-screen","game-screen"];
- const state={client:null,code:null,me:null,room:null,poll:null,selected:null};
+ const state={client:null,code:null,me:null,room:null,poll:null,selected:null,lastRoundStatus:null,lastRoundNumber:null,lastWinner:null,lastGameStatus:null};
  const show=id=>screens.forEach(s=>$(s).classList.toggle("active",s===id));
  const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  let toastTimer;
@@ -32,8 +32,27 @@
  async function submit(){if(!state.selected)return;try{await rpc("op_submit_card",{p_code:state.code,p_card_id:Number(state.selected)});state.selected=null;await refresh();}catch(e){err(e);}}
  async function choose(id){try{await rpc("op_choose_winner",{p_code:state.code,p_submission_id:id});await refresh();}catch(e){err(e);}}
  async function next(){try{await rpc("op_next_round",{p_code:state.code});state.selected=null;await refresh();}catch(e){err(e);}}
+ function celebrate(kind, winner, card){
+  const layer=$("celebration");
+  if(!layer)return;
+  layer.className="celebration "+(kind==="game"?"game-victory":"round-victory");
+  layer.innerHTML='<div class="celebration-backdrop"></div><div class="celebration-content"><div class="celebration-kicker">'+(kind==="game"?"THE GAME IS OVER":"THE JUDGE HAS SPOKEN")+'</div><div class="celebration-title">'+(kind==="game"?"OUT OF POCKET CHAMPION":"THE WINNING ANSWER")+'</div><div class="celebration-card">'+esc(card||"")+'</div><div class="celebration-winner">'+esc(winner||"Someone")+'</div><div class="celebration-points">'+(kind==="game"?"CLAIMED THE CROWN":"＋1 POINT")+'</div><button class="button button-primary celebration-close">LET'S GO ↗</button></div><div class="confetti" aria-hidden="true">'+Array.from({length:44},(_,i)=>'<i style="--i:'+i+'"></i>').join("")+'</div>';
+  layer.classList.remove("hidden");
+  layer.querySelector(".celebration-close").addEventListener("click",()=>layer.classList.add("hidden"));
+  setTimeout(()=>layer.classList.add("hidden"),kind==="game"?11000:7500);
+ }
  function render(s){
+  const previousRound=state.lastRoundNumber;
+  const previousWinner=state.lastWinner;
+  const previousGameStatus=state.lastGameStatus;
   state.room=s;state.me=s.me;
+  const winnerChanged=!!s.winner&&(!previousWinner||previousWinner.name!==s.winner.name||previousRound!==s.round_number);
+  const gameJustFinished=s.status==="finished"&&previousGameStatus!=="finished";
+  state.lastRoundNumber=s.round_number;
+  state.lastWinner=s.winner||null;
+  state.lastGameStatus=s.status;
+  if(gameJustFinished){celebrate("game",s.winner?.name,s.winner?.card||"");}
+  else if(winnerChanged){celebrate("round",s.winner.name,s.winner.card||"");}
   $("room-code").textContent=s.code;$("player-count").textContent=s.players.length+"/10";
   $("player-list").innerHTML=s.players.map(p=>'<div class="player-row"><span class="avatar">'+esc(p.name.slice(0,1).toUpperCase())+'</span><span>'+esc(p.name)+'</span>'+(p.host?'<span class="host-tag">HOST</span>':'')+(p.id===s.me.id?'<span class="host-tag">YOU</span>':'')+'</div>').join("");
   $("start-game").classList.toggle("hidden",!s.me.host||s.status!=="lobby");
