@@ -172,10 +172,11 @@ alter table public.op_rounds enable row level security;
 alter table public.op_hands enable row level security;
 alter table public.op_submissions enable row level security;
 alter table public.op_winners enable row level security;
+alter table public.op_used_answers enable row level security;
 alter table public.op_prompts enable row level security;
 alter table public.op_answers enable row level security;
 -- All game reads/writes go through security-definer RPCs to keep hands and unrevealed cards private.
-revoke all on public.op_rooms,public.op_players,public.op_rounds,public.op_hands,public.op_submissions,public.op_winners,public.op_prompts,public.op_answers from anon,authenticated;
+revoke all on public.op_rooms,public.op_players,public.op_rounds,public.op_hands,public.op_submissions,public.op_winners,public.op_used_answers,public.op_prompts,public.op_answers from anon,authenticated;
 
 create or replace function public.op_create_room(p_name text)
 returns jsonb language plpgsql security definer set search_path=public as $$
@@ -206,7 +207,7 @@ begin
 end $$;
 
 create or replace function public.op_start_game(p_code text)
-returns jsonb language plpgsql security definer set search_path=public as $$
+returns jsonb language plpgsql security definer set search_path=public as $
 declare v_room op_rooms; v_judge op_players; v_round op_rounds; v_count int; v_player op_players; v_prompt text;
 begin
  select * into v_room from op_rooms where code=upper(trim(p_code)) for update;
@@ -215,37 +216,56 @@ begin
  if v_count<3 then raise exception 'At least 3 players are required'; end if;
  if v_room.status<>'lobby' then raise exception 'Game already started'; end if;
  select * into v_judge from op_players where room_id=v_room.id order by seat limit 1;
- select body into v_prompt from op_prompts order by random() limit 1;
+ select p.body into v_prompt from op_prompts p
+ where not exists(select 1 from op_rounds r where r.room_id=v_room.id and r.prompt=p.body)
+ order by random() limit 1;
+ if v_prompt is null then raise exception 'This room has used every prompt card. Start a new room for a fresh deck.'; end if;
  update op_rooms set status='playing',round_number=1,judge_player_id=v_judge.id where id=v_room.id;
  insert into op_rounds(room_id,prompt,judge_player_id) values(v_room.id,v_prompt,v_judge.id) returning * into v_round;
  update op_rooms set current_round_id=v_round.id where id=v_room.id;
  for v_player in select * from op_players where room_id=v_room.id loop
   insert into op_hands(player_id,card_id)
-  select v_player.id,id from op_answers order by random() limit 10;
+  select v_player.id,a.id from op_answers a
+  where not exists(
+   select 1 from op_hands h join op_players hp on hp.id=h.player_id
+   where hp.room_id=v_room.id and h.card_id=a.id
+  )
+  order by random() limit 10;
  end loop;
  return public.op_get_state(p_code);
-end $$;
+end $;
 
 create or replace function public.op_submit_card(p_code text,p_card_id bigint)
-returns jsonb language plpgsql security definer set search_path=public as $$
+returns jsonb language plpgsql security definer set search_path=public as $
 declare v_room op_rooms; v_round op_rounds; v_player op_players; v_card text; v_total int; v_expected int;
 begin
  select * into v_room from op_rooms where code=upper(trim(p_code)) for update;
+ if not found then raise exception 'Room not found'; end if;
  select * into v_player from op_players where room_id=v_room.id and user_id=auth.uid();
  if not found then raise exception 'You are not in this room'; end if;
  select * into v_round from op_rounds where id=v_room.current_round_id for update;
  if v_player.id=v_round.judge_player_id then raise exception 'The judge cannot submit'; end if;
  if v_round.status<>'submitting' then raise exception 'Submissions are closed'; end if;
- select body into v_card from op_answers a join op_hands h on h.card_id=a.id where h.player_id=v_player.id and a.id=p_card_id;
+ select a.body into v_card from op_answers a join op_hands h on h.card_id=a.id
+ where h.player_id=v_player.id and a.id=p_card_id;
  if v_card is null then raise exception 'That card is not in your hand'; end if;
  insert into op_submissions(round_id,player_id,card_text) values(v_round.id,v_player.id,v_card);
+ insert into op_used_answers(room_id,card_id) values(v_room.id,p_card_id)
+ on conflict(room_id,card_id) do nothing;
  delete from op_hands where player_id=v_player.id and card_id=p_card_id;
- insert into op_hands(player_id,card_id) select v_player.id,id from op_answers a where not exists(select 1 from op_hands h where h.player_id=v_player.id and h.card_id=a.id) order by random() limit 1;
+ insert into op_hands(player_id,card_id)
+ select v_player.id,a.id from op_answers a
+ where not exists(select 1 from op_used_answers u where u.room_id=v_room.id and u.card_id=a.id)
+ and not exists(
+  select 1 from op_hands h join op_players hp on hp.id=h.player_id
+  where hp.room_id=v_room.id and h.card_id=a.id
+ )
+ order by random() limit 1;
  select count(*) into v_total from op_submissions where round_id=v_round.id;
  select count(*)-1 into v_expected from op_players where room_id=v_room.id;
  if v_total>=v_expected then update op_rounds set status='judging' where id=v_round.id; end if;
  return public.op_get_state(p_code);
-end $$;
+end $;
 
 create or replace function public.op_choose_winner(p_code text,p_submission_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
@@ -275,7 +295,10 @@ begin
  if v_room.status='finished' then raise exception 'Game is over'; end if;
  if v_old.status<>'complete' then raise exception 'This round is not complete'; end if;
  select * into v_judge from op_players where room_id=v_room.id and seat=(select mod(seat,(select count(*) from op_players where room_id=v_room.id))+1 from op_players where id=v_old.judge_player_id);
- select body into v_prompt from op_prompts order by random() limit 1;
+ select p.body into v_prompt from op_prompts p
+ where not exists(select 1 from op_rounds r where r.room_id=v_room.id and r.prompt=p.body)
+ order by random() limit 1;
+ if v_prompt is null then raise exception 'This room has used every prompt card. Start a new room for a fresh deck.'; end if;
  update op_rooms set round_number=round_number+1,judge_player_id=v_judge.id where id=v_room.id;
  insert into op_rounds(room_id,prompt,judge_player_id) values(v_room.id,v_prompt,v_judge.id) returning * into v_round;
  update op_rooms set current_round_id=v_round.id where id=v_room.id;
@@ -292,7 +315,7 @@ begin
  if not found then raise exception 'You are not in this room'; end if;
  select * into v_round from op_rounds where id=v_room.current_round_id;
  select coalesce(jsonb_agg(jsonb_build_object('id',p.id,'name',p.display_name,'score',p.score,'seat',p.seat,'host',p.user_id=v_room.host_id) order by p.seat),'[]'::jsonb) into v_players from op_players p where p.room_id=v_room.id;
- select coalesce(jsonb_agg(jsonb_build_object('id',a.id,'body',a.body)),'[]'::jsonb) into v_hand from op_hands h join op_answers a on a.id=h.card_id where h.player_id=v_me.id;
+ select coalesce(jsonb_agg(jsonb_build_object('id',a.id,'body',a.body) order by h.dealt_order),'[]'::jsonb) into v_hand from op_hands h join op_answers a on a.id=h.card_id where h.player_id=v_me.id;
  if v_round.status in ('judging','complete') then
   select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'body',s.card_text) order by s.created_at),'[]'::jsonb) into v_submissions from op_submissions s where s.round_id=v_round.id;
  else v_submissions='[]'::jsonb; end if;
