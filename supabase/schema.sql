@@ -183,7 +183,7 @@ declare v_room op_rooms; v_player op_players;
 begin
  if auth.uid() is null then raise exception 'Sign in required'; end if;
  if char_length(trim(p_name)) not between 1 and 18 then raise exception 'Name must be 1–18 characters'; end if;
- insert into op_rooms(code,host_id) values(upper(substr(encode(gen_random_bytes(5),'hex'),1,6)),auth.uid()) returning * into v_room;
+ insert into op_rooms(code,host_id) values(upper(substr(replace(gen_random_uuid()::text,'-',''),1,6)),auth.uid()) returning * into v_room;
  insert into op_players(room_id,user_id,display_name,seat) values(v_room.id,auth.uid(),trim(p_name),1) returning * into v_player;
  return jsonb_build_object('code',v_room.code,'player_id',v_player.id);
 end $$;
