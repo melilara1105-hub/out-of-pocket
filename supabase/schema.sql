@@ -217,7 +217,7 @@ begin
 end $$;
 
 create or replace function public.op_start_game(p_code text)
-returns jsonb language plpgsql security definer set search_path=public as $
+returns jsonb language plpgsql security definer set search_path=public as $$
 declare v_room op_rooms; v_judge op_players; v_round op_rounds; v_count int; v_player op_players; v_prompt text;
 begin
  select * into v_room from op_rooms where code=upper(trim(p_code)) for update;
@@ -243,10 +243,10 @@ begin
   order by random() limit 10;
  end loop;
  return public.op_get_state(p_code);
-end $;
+end $$;
 
 create or replace function public.op_submit_card(p_code text,p_card_id bigint)
-returns jsonb language plpgsql security definer set search_path=public as $
+returns jsonb language plpgsql security definer set search_path=public as $$
 declare v_room op_rooms; v_round op_rounds; v_player op_players; v_card text; v_total int; v_expected int;
 begin
  select * into v_room from op_rooms where code=upper(trim(p_code)) for update;
@@ -275,7 +275,7 @@ begin
  select count(*)-1 into v_expected from op_players where room_id=v_room.id;
  if v_total>=v_expected then update op_rounds set status='judging' where id=v_round.id; end if;
  return public.op_get_state(p_code);
-end $;
+end $$;
 
 create or replace function public.op_choose_winner(p_code text,p_submission_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
