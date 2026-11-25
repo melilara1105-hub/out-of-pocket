@@ -98,4 +98,5 @@
  $("rules-close").addEventListener("click",()=>$("rules-dialog").close());
  $("join-code").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
  if(!configured()){$("lobby-message").textContent="Connect your Supabase project to enable online rooms. Setup instructions are in README.md.";}
+ window.__OP_GAME_READY = true;
 })();
