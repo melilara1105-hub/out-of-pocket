@@ -30,7 +30,7 @@ window.OP_CARDS = {
   "The worst thing to accidentally send to the family group chat is ______.",
   "My toxic trait is believing I can fix ______.",
   "The new school rule bans ______.",
-  "The reason aliens refuse to visit Earth is ______."
+  "The reason aliens refuse to visit Earth is ______.",
   "Every family has one person who would absolutely survive a murder investigation because ______.",
   "The worst thing to hear from the bathroom at a house party is ______.",
   "My guardian angel has officially submitted a two-week notice because of ______.",
@@ -152,7 +152,7 @@ window.OP_CARDS = {
   "A man who says 'I hate drama' and is the drama.",
   "An Uber driver who knows too much.",
   "A haunted Stanley cup.",
-  "A resignation letter written in the Taco Bell parking lot."
+  "A resignation letter written in the Taco Bell parking lot.",
   "A rotisserie chicken wearing a tiny necklace.",
   "Three raccoons in a trench coat pretending to be a licensed therapist.",
   "A wet sock with a criminal record.",
